@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>file upload demo</title>
+    <link rel="stylesheet" href="">
+</head>
+
+<body>
+    <main>
+        <div>
+            <div id="uploader-1" data-max="2"></div>
+        </div>
+    </main>
+</body>
+
+
+<script src="jquery.min.js"></script>
+<link href="uploader_viewer/viewer.min.css" rel="stylesheet">
+<script src="uploader_viewer/viewer.min.js"></script><!-- Viewer.js is required -->
+<script src="uploader_viewer/jquery-viewer.min.js"></script>
+<script src="uploader_viewer/jquery.dm-uploader.min.js"></script>
+
+<script>
+
+var files_template = '<div class="uploader-image-items">' +
+        '<img src="%%src%%" alt="%%filename%%" id="%%id%%" url="%%url%%">' +
+        '<div class="uploader-loading">0%</div>' +
+        '<div class="uploader-error"><span>!</span></div>' +
+        '<div class="uploader-delete-btn"><span>×</span></div>' +
+        '</div>';
+
+    var files_uploader_template = '<div class="uploader-file">' +
+        '<span class="tips">选择文件</span>' +
+        '<input type="file" title="Click to add Files">' +
+        '</div>' +
+        '<div class="uploader-tips-text">请上传不多于<span> %%max%% </span>张不大于10M的图片</div>' +
+        '<div class="uploader-image-container" id="%%id%%"></div>';
+
+
+    // View a list of images
+    var tmp = initUploader('#uploader-1');
+
+
+    function disableChange(me,disabled){
+        $(me).find("input").attr('disabled',disabled?'disabled':false);
+        if (disabled) {
+            $(me).find('.uploader-file').addClass('uploader-disabled');
+        }else{
+            $(me).find('.uploader-file').removeClass('uploader-disabled');
+        }
+    }
+
+
+    function initUploader(uploaderId) {
+        var max = $(uploaderId).attr('data-max') || 1;
+        var template = files_uploader_template;
+        template = template.replace('%%id%%', uploaderId.replace('#', '') + '-file');
+        template = template.replace('%%max%%', max);
+        template = $(template);
+        $(uploaderId).append(template);
+
+        $(uploaderId).dmUploader({
+            url: '/upload.action',
+            dataType: 'json',
+            maxFileSize: 10000000,
+            allowedTypes: "image/*",
+            multiple: max > 1,
+            onInit: function () {
+                onInit(this);
+            },
+            onNewFile: function (id, file) {
+                ui_multi_add_file(id, file, uploaderId + '-file');
+            },
+            onUploadProgress: function (id, percent) {
+                onUploadProgress(id, percent)
+            },
+            onUploadSuccess: function (id, data) {
+                onUploadSuccess(id, data)
+            },
+            onUploadError: function (id, xhr, status, message) {
+                onUploadError(id, xhr, status, message)
+            },
+        });
+        return {
+            obj: $(uploaderId),
+            getUrls: function () {
+                var images = $(uploaderId).find('img');
+                var result = '';
+                for (var i = 0; i < images.length; i++) {
+                    result += $(images[i]).attr('url') + ',';
+                }
+                if (result.length > 1) {
+                    result = result.substr(0, result.length - 1);
+                }
+                return result;
+            },
+            setUrls: function (urlString) {
+                var disabled = $(uploaderId).attr('disabled');
+                var urls = [];
+                if (urlString && urlString.length > 1) {
+                    urls = urlString.split(',');
+                    if (urls && urls.length > 0) {
+                        for (var i = 0; i < urls.length; i++) {
+                            var mydate = new Date();
+                            var id = uploaderId.replace('#', '') +i;
+                            var template = files_template;
+                            template = template.replace('%%src%%',urls[i]);
+                            template = template.replace('%%filename%%', '');
+                            template = template.replace('%%id%%', id);
+                            template = template.replace('%%url%%', urls[i]);
+                            template = $(template);
+                            $(uploaderId+'-file').append(template);
+                            var deleteBtn = $('#' + id).siblings(".uploader-delete-btn");
+                            if(disabled && disabled == 'disabled'){
+                                deleteBtn.hide();
+                            }else{
+                                deleteBtn.show();
+                                $(deleteBtn).click(function () {
+                                    $(deleteBtn).parent().remove();
+                                    disableChange($(uploaderId),false);
+                                })
+                            }
+                            var error = $('#' + id).siblings(".uploader-error");
+                            error.hide();
+                            var loading = $('#' + id).siblings(".uploader-loading");
+                            loading.hide();
+                            var $image = $('#' + id);
+                            $image.viewer();
+                        }
+                    }
+                }
+
+
+
+
+
+
+
+            }
+        }
+    }
+
+
+
+    function onInit(me) {
+        var disabled = $(me).attr('disabled');
+        if (disabled && disabled == 'disabled') {
+            $(me).find("input").attr('disabled','disabled');
+            $(me).find('.uploader-file').addClass('uploader-disabled');
+        }
+    }
+
+
+    function onUploadProgress(id, percent) {
+        var loading = $('#' + id).siblings(".uploader-loading");
+        loading.html(percent + "%");
+    }
+
+    function onUploadSuccess(id, data) {
+        var img = $('#' + id);
+        img.attr('url', data.data[0].url);
+        var loading = $('#' + id).siblings(".uploader-loading");
+        loading.hide();
+        var deleteBtn = $('#' + id).siblings(".uploader-delete-btn");
+        deleteBtn.show();
+    }
+
+    function onUploadError(id, xhr, status, message) {
+        var loading = $('#' + id).siblings(".uploader-loading");
+        loading.hide();
+        var error = $('#' + id).siblings(".uploader-error");
+        error.show();
+        var deleteBtn = $('#' + id).siblings(".uploader-delete-btn");
+        deleteBtn.show();
+    }
+
+    // Creates a new file and add it to our list
+    function ui_multi_add_file(id, file, containerId) {
+        var maxFile = $(containerId).parent().attr('data-max') || 1; //最多几张
+
+        if (typeof FileReader !== 'undefined') {
+            var reader = new FileReader();
+            var fileName = file.name;
+            reader.onload = function (e) {
+
+                if ($(containerId).find('.uploader-image-items').length >= maxFile-1) {
+                    disableChange($(containerId).parent(),true);
+                }
+                if ($(containerId).find('.uploader-image-items').length >= maxFile) {
+                    return false;
+                }
+
+                var template = files_template;
+                template = template.replace('%%src%%', e.target.result);
+                template = template.replace('%%filename%%', fileName);
+                template = template.replace('%%id%%', id);
+                template = template.replace('%%url%%', '');
+                template = $(template);
+                $(containerId).append(template);
+                var deleteBtn = $('#' + id).siblings(".uploader-delete-btn");
+                deleteBtn.hide();
+                $(deleteBtn).click(function () {
+                    $(deleteBtn).parent().remove();
+                    disableChange($(containerId).parent(),false);
+                })
+                var error = $('#' + id).siblings(".uploader-error");
+                error.hide();
+                var $image = $('#' + id);
+                $image.viewer();
+            }
+            reader.readAsDataURL(file);
+        }
+    }
+</script>
+
+
+
+
+<style>
+    .uploader-image-container {
+        display: flex;
+        flex-wrap: wrap;
+        flex-direction: row;
+    }
+
+    .uploader-image-items {
+        position: relative;
+        margin: 10px;
+        width: 240px;
+        height: 150px;
+        overflow: hidden;
+        border-radius: 10px;
+        -moz-box-shadow: 0px 1px 6px #8C8C8C;
+        -webkit-box-shadow: 0px 1px 6px #8C8C8C;
+        box-shadow: 0px 1px 6px #8C8C8C;
+    }
+
+    .uploader-image-items img {
+        width: 240px;
+        height: 150px;
+        cursor: pointer;
+    }
+
+    .uploader-delete-btn {
+        cursor: pointer;
+        opacity: 0.875;
+        width: 60px;
+        height: 60px;
+        position: absolute;
+        background: red;
+        top: -30px;
+        right: -30px;
+        transform: rotate(45deg);
+    }
+
+    .uploader-delete-btn span {
+        color: #FFFFFF;
+        position: absolute;
+        bottom: 0;
+        display: block;
+        width: 60px;
+        text-align: center;
+        transform: rotate(-45deg);
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    .uploader-loading {
+        color: #FFFFFF;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.375);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .uploader-error {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.375);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .uploader-error span {
+        opacity: 0.875;
+        color: #FFFFFF;
+        width: 30px;
+        height: 30px;
+        text-align: center;
+        line-height: 30px;
+        border-radius: 20px;
+        background-color: red;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    .uploader-file {
+        cursor: pointer;
+        font-size: 12px;
+        width: 80px;
+        height: 30px;
+        background: #ffffff;
+        background-size: cover;
+        border: 1px solid #5a86d1;
+        color: #5a86d1;
+        line-height: 30px;
+        text-align: center;
+        border-radius: 3px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .uploader-file span {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    .uploader-file input {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        right: 0;
+        top: 0;
+        opacity: 0;
+    }
+
+    .uploader-disabled {
+        cursor: none;
+        opacity: 0.8;
+        border: 1px solid gray;
+        color: gray;
+    }
+    .uploader-file,.uploader-tips-text{
+        display: inline-block;
+    }
+    .uploader-tips-text{
+        margin-left: 20px;
+       font-size: 12px;
+       color: gray;
+    }
+    .uploader-tips-text span{
+       color: red;
+    }
+</style>
+
+</html>
